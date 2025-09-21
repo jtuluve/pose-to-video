@@ -1,0 +1,28 @@
+{
+  "name": "pose-to-video",
+  "version": "1.0.0",
+  "description": "A library to convert pose estimation data from a custom binary format to a video.",
+  "main": "src/index.js",
+  "scripts": {},
+  "keywords": [
+    "pose",
+    "pose-estimation",
+    "video",
+    "canvas",
+    "ffmpeg"
+  ],
+  "author": "Jnanesh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jtuluve/pose-to-video.git"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "binary-parser": "^2.2.1",
+    "canvas": "^3.2.0"
+  },
+  "esnext": "true",
+  "type": "commonjs"
+}
