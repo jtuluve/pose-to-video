@@ -97,4 +97,5 @@ if (require.main === module) poseToVideo("./example.pose", "output.mp4");
 
 module.exports = {
   poseToVideo,
+  poseJsonToVideo
 };
