@@ -145,12 +145,54 @@ function parseBodyV0_1(header, buffer, version) {
     }
     return { people };
   }
+  function pushFrame(newFrame) {
+  const frameIndex = info._frames; // next available slot
+
+  for (let j = 0; j < info._people; j++) {
+    const person = newFrame.people[j];
+    let k = 0;
+
+    header.components.forEach((component) => {
+      for (let l = 0; l < component.points.length; l++) {
+        const offset = frameIndex * (info._people * _points) + j * _points;
+        const place = offset + k + l;
+
+        const point = person[component.name][l];
+
+        // write confidence
+        confidence.data[place] = point.C;
+
+        // write other dims
+        [...component.format].forEach((dim, dimIndex) => {
+          if (dim !== "C") {
+            data.data[place * _dims + dimIndex] = point[dim];
+          }
+        });
+      }
+      k += component.points.length;
+    });
+  }
+
+  // update frame count
+  info._frames++;
+  return info._frames;
+}
+
   const frames = new Proxy(
     {},
     {
       get: function (target, name) {
         if (name === "length") {
           return info._frames;
+        }
+        if (name === "push") {
+        return pushFrame; 
+      }
+        if(typeof name === "symbol") {
+          return undefined;
+        }
+        if(typeof name === "string" && /[^0-9]+/.test(name)) {
+          return undefined;
         }
 
         // Convert string key to number safely
