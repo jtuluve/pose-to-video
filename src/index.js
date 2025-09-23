@@ -2,6 +2,7 @@ const { Pose } = require("./pose-format/index.js");
 const { CanvasPoseRenderer } = require("./renderers/canvas.pose-renderer.js");
 const { existsSync, mkdirSync, writeFileSync } = require("fs");
 const { spawn } = require("child_process");
+const { default: ffmpegPath } = require("ffmpeg-static");
 
 /**
  *
@@ -31,7 +32,7 @@ async function poseToVideo(posePath, outputPath) {
 
   // 3. Call ffmpeg to stitch frames
   console.log("Combining frames into video...");
-  const ffmpeg = spawn("ffmpeg", [
+  const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
     "-framerate",
     String(fps),
     "-i",
@@ -73,7 +74,7 @@ async function poseJsonToVideo(pose, outputPath) {
 
   // 3. Call ffmpeg to stitch frames
   console.log("Combining frames into video...");
-  const ffmpeg = spawn("ffmpeg", [
+  const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
     "-framerate",
     String(fps),
     "-i",
