@@ -4,32 +4,106 @@ const { mkdirSync, writeFileSync, rmSync } = require("fs");
 const { spawn } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 
+/**
+ * Cleans and validates pose data.
+ * Returns a sanitized pose or null if invalid.
+ */
+function cleanPoseJson(pose) {
+  if (!pose || typeof pose !== "object") {
+    console.warn("❌ Invalid pose: not an object");
+    return null;
+  }
+
+  if (!pose.header || !pose.body) {
+    console.warn("❌ Pose missing header or body");
+    return null;
+  }
+
+  if (!Array.isArray(pose.body.frames)) {
+    console.warn("❌ Pose body.frames is missing or invalid");
+    return null;
+  }
+
+  if (typeof pose.body.fps !== "number") {
+    console.warn("❌ Pose body.fps is missing or not a number");
+    return null;
+  }
+
+  const frames = [];
+  for (let f = 0; f < pose.body.frames.length; f++) {
+    const frame = pose.body.frames[f];
+    let isValid = true;
+
+    if (!Array.isArray(frame.people)) {
+      console.warn(`⚠️ Frame ${f}: Missing or invalid 'people' array`);
+      continue;
+    }
+
+    for (const person of frame.people) {
+      for (const component of pose.header.components) {
+        const points = person[component.name];
+        if (!Array.isArray(points) || points.length !== component.points.length) {
+          isValid = false;
+          break;
+        }
+
+        for (const point of points) {
+          if (Object.keys(point).length !== component.format.length) {
+            isValid = false;
+            break;
+          }
+
+          for (const key of component.format) {
+            if (!(key in point)) {
+              isValid = false;
+              break;
+            }
+            if (key !== "C" && typeof point[key] !== "number") {
+              isValid = false;
+              break;
+            }
+          }
+          if (!isValid) break;
+        }
+        if (!isValid) break;
+      }
+      if (!isValid) break;
+    }
+
+    if (isValid) frames.push(frame);
+  }
+
+  console.log(`✅ ${frames.length}/${pose.body.frames.length} valid frames found`);
+  pose.body.frames = frames;
+  return pose;
+}
+
+/**
+ * Helper: Render frames and save them to disk
+ */
 function generateFrames(pose, renderer) {
   rmSync("frames", { recursive: true, force: true });
   mkdirSync("frames");
 
-  const { frames } = pose.body;
-  console.log(`Rendering ${frames.length} frames...`);
-
-  frames.forEach((frame, i) => {
-    const image = renderer.render(frame);
-    const buffer = image.toBuffer("image/png");
+  console.log(`Rendering ${pose.body.frames.length} frames...`);
+  pose.body.frames.forEach((frame, i) => {
+    const img = renderer.render(frame);
+    const buffer = img.toBuffer("image/png");
     const filename = `frames/frame_${String(i).padStart(5, "0")}.png`;
     writeFileSync(filename, buffer);
   });
 }
 
+/**
+ * Helper: Use ffmpeg to create a video from rendered frames
+ */
 function combineFramesToVideo(fps, outputPath) {
   console.log("Combining frames into video...", ffmpegPath);
   const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
-    "-framerate",
-    String(fps),
-    "-i",
-    "frames/frame_%05d.png",
-    "-c:v",
-    "libx264",
-    "-pix_fmt",
-    "yuv420p",
+    "-framerate", String(fps),
+    "-i", "frames/frame_%05d.png",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
     outputPath,
   ]);
 
@@ -39,10 +113,17 @@ function combineFramesToVideo(fps, outputPath) {
 }
 
 /**
- * Converts a .pose file to a video
+ * Core function shared by both poseToVideo and poseJsonToVideo
  */
-async function poseToVideo(posePath, outputPath) {
-  const pose = await Pose.fromLocal(posePath);
+async function processPose(pose, outputPath) {
+  console.log("Cleaning pose..");
+  pose = cleanPoseJson(pose);
+
+  if (!pose) {
+    console.error("Pose file is invalid!");
+    return false;
+  }
+
   const fps = pose.body.fps;
   const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
@@ -52,14 +133,19 @@ async function poseToVideo(posePath, outputPath) {
   return true;
 }
 
+/**
+ * Converts a .pose file into a video
+ */
+async function poseToVideo(posePath, outputPath) {
+  const pose = await Pose.fromLocal(posePath);
+  return processPose(pose, outputPath);
+}
+
+/**
+ * Converts a JSON pose object into a video
+ */
 async function poseJsonToVideo(pose, outputPath) {
-  const fps = pose.body.fps;
-  const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
-
-  generateFrames(pose, renderer);
-  combineFramesToVideo(fps, outputPath);
-
-  return true;
+  return processPose(pose, outputPath);
 }
 
 if (require.main === module) poseToVideo("./example.pose", "output.mp4");
