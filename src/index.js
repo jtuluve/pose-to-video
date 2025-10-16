@@ -19,30 +19,28 @@ function cleanPoseJson(pose) {
     return null;
   }
 
-  if (!Array.isArray(pose.body.frames)) {
-    console.warn("❌ Pose body.frames is missing or invalid");
-    return null;
-  }
-
   if (typeof pose.body.fps !== "number") {
     console.warn("❌ Pose body.fps is missing or not a number");
     return null;
   }
 
   const frames = [];
-  for (let f = 0; f < pose.body.frames.length; f++) {
+  for (let f = 0; f < pose.body._frames; f++) {
     const frame = pose.body.frames[f];
     let isValid = true;
 
     if (!Array.isArray(frame.people)) {
-      console.warn(`⚠️ Frame ${f}: Missing or invalid 'people' array`);
+      console.warn(`⚠ Frame ${f}: Missing or invalid 'people' array`);
       continue;
     }
 
     for (const person of frame.people) {
       for (const component of pose.header.components) {
         const points = person[component.name];
-        if (!Array.isArray(points) || points.length !== component.points.length) {
+        if (
+          !Array.isArray(points) ||
+          points.length !== component.points.length
+        ) {
           isValid = false;
           break;
         }
@@ -73,8 +71,11 @@ function cleanPoseJson(pose) {
     if (isValid) frames.push(frame);
   }
 
-  console.log(`✅ ${frames.length}/${pose.body.frames.length} valid frames found`);
+  console.log(
+    `✅ ${frames.length}/${pose.body.frames.length} valid frames found`
+  );
   pose.body.frames = frames;
+  pose.body._frames = frames.length;
   return pose;
 }
 
@@ -86,30 +87,46 @@ function generateFrames(pose, renderer) {
   mkdirSync("frames");
 
   console.log(`Rendering ${pose.body.frames.length} frames...`);
-  pose.body.frames.forEach((frame, i) => {
+  let frame;
+  for (let i = 0; i < pose.body.frames.length; i++) {
+    frame = pose.body.frames[i];
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
     const filename = `frames/frame_${String(i).padStart(5, "0")}.png`;
     writeFileSync(filename, buffer);
-  });
+  }
 }
 
 /**
  * Helper: Use ffmpeg to create a video from rendered frames
  */
-function combineFramesToVideo(fps, outputPath) {
-  console.log("Combining frames into video...", ffmpegPath);
-  const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
-    "-framerate", String(fps),
-    "-i", "frames/frame_%05d.png",
-    "-c:v", "libx264",
-    "-pix_fmt", "yuv420p",
-    outputPath,
-  ]);
+async function combineFramesToVideo(fps, outputPath) {
+  return new Promise((resolve, reject) => {
+    console.log("Combining frames into video...", ffmpegPath);
+    const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
+      "-framerate",
+      String(fps),
+      "-i",
+      "frames/frame_%05d.png",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      outputPath,
+    ]);
 
-  ffmpeg.stdout.on("data", (d) => console.log(d.toString()));
-  ffmpeg.stderr.on("data", (d) => console.error(d.toString()));
-  ffmpeg.on("close", (code) => console.log(`FFmpeg finished with code ${code}`));
+    ffmpeg.stdout.on("data", (d) => console.log(d.toString()));
+    ffmpeg.stderr.on("data", (d) => console.error(d.toString()));
+    ffmpeg.on("close", (code) => {
+      console.log(`FFmpeg finished with code ${code}`);
+      if (code !== 0) {
+        console.error("❌ FFmpeg failed to create video");
+        reject(new Error("FFmpeg failed"));
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 /**
@@ -128,7 +145,7 @@ async function processPose(pose, outputPath) {
   const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
   generateFrames(pose, renderer);
-  combineFramesToVideo(fps, outputPath);
+  await combineFramesToVideo(fps, outputPath);
 
   return true;
 }
