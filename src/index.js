@@ -7,6 +7,8 @@ const ffmpegPath = require("ffmpeg-static");
 /**
  * Cleans and validates pose data.
  * Returns a sanitized pose or null if invalid.
+ * @param {Pose} pose - The pose JSON object to clean
+ * @returns {Pose|null} - Cleaned pose or null if invalid
  */
 function cleanPoseJson(pose) {
   if (!pose || typeof pose !== "object") {
@@ -81,6 +83,9 @@ function cleanPoseJson(pose) {
 
 /**
  * Helper: Render frames and save them to disk
+ * @param {Pose} pose - The pose object containing frames
+ * @param {CanvasPoseRenderer} renderer - The renderer instance
+ * @returns {void}
  */
 function generateFrames(pose, renderer) {
   rmSync("frames", { recursive: true, force: true });
@@ -92,22 +97,26 @@ function generateFrames(pose, renderer) {
     frame = pose.body.frames[i];
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
-    const filename = `frames/frame_${String(i).padStart(5, "0")}.png`;
+    const filename = `frames/frame_${String(i).padStart(Math.max(pose.body.frames.length.toString().length, 5), "0")}.png`;
     writeFileSync(filename, buffer);
   }
 }
 
 /**
  * Helper: Use ffmpeg to create a video from rendered frames
+ * @param {number} fps - Frames per second for the output video
+ * @param {string} outputPath - Path to save the output video
+ * @param {number} padLength - Number of digits to pad frame filenames
+ * @returns {Promise<void>} - Resolves when video is created
  */
-async function combineFramesToVideo(fps, outputPath) {
+async function combineFramesToVideo(fps, outputPath, padLength = 5) {
   return new Promise((resolve, reject) => {
     console.log("Combining frames into video...", ffmpegPath);
     const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
       "-framerate",
       String(fps),
       "-i",
-      "frames/frame_%05d.png",
+      `frames/frame_%0${padLength}d.png`,
       "-c:v",
       "libx264",
       "-pix_fmt",
@@ -145,7 +154,7 @@ async function processPose(pose, outputPath) {
   const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
   generateFrames(pose, renderer);
-  await combineFramesToVideo(fps, outputPath);
+  await combineFramesToVideo(fps, outputPath, pose.body.frames.length.toString().length);
 
   return true;
 }

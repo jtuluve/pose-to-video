@@ -117,7 +117,7 @@ class PoseRenderer {
    * @param {import("./types").PoseBodyFrameModel} frame
    */
   renderFrame(frame) {
-    return frame.people.map((person) =>
+    frame.people.forEach((person) =>
       this.viewer.pose.header.components.map((component) => {
         const joints = person[component.name];
         return [
