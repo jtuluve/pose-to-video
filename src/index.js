@@ -97,7 +97,10 @@ function generateFrames(pose, renderer) {
     frame = pose.body.frames[i];
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
-    const filename = `frames/frame_${String(i).padStart(pose.body.frames.length.toString().length, "0")}.png`;
+    const filename = `frames/frame_${String(i).padStart(
+      pose.body.frames.length.toString().length,
+      "0"
+    )}.png`;
     writeFileSync(filename, buffer);
   }
 }
@@ -113,6 +116,9 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5) {
   return new Promise((resolve, reject) => {
     console.log("Combining frames into video...", ffmpegPath);
     const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
+      "-hide_banner",
+      "-loglevel",
+      "error",
       "-framerate",
       String(fps),
       "-i",
@@ -154,7 +160,11 @@ async function processPose(pose, outputPath) {
   const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
   generateFrames(pose, renderer);
-  await combineFramesToVideo(fps, outputPath, pose.body.frames.length.toString().length);
+  await combineFramesToVideo(
+    fps,
+    outputPath,
+    pose.body.frames.length.toString().length
+  );
 
   return true;
 }

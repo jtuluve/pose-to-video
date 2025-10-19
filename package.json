@@ -1,6 +1,6 @@
 {
   "name": "pose-to-video",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "A library to convert pose estimation data from a custom binary format to a video.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
