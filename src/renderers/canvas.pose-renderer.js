@@ -113,6 +113,7 @@ class CanvasPoseRenderer extends PoseRenderer {
     this.canvas.height = this.viewer.height;
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillStyle = "rgba(255, 255, 255, 1)";
 
     const w = this.viewer.width;
     const h = this.viewer.height;
