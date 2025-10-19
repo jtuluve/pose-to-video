@@ -89,8 +89,7 @@ function cleanPoseJson(pose) {
  * @returns {void}
  */
 function generateFrames(pose, renderer, framesDir) {
-  rmSync(framesDir, { recursive: true, force: true });
-  mkdirSync(framesDir);
+  mkdirSync(framesDir, { recursive: true });
 
   console.log(`Rendering ${pose.body.frames.length} frames...`);
   let frame;
@@ -157,7 +156,7 @@ async function processPose(pose, outputPath) {
     return false;
   }
 
-  const framesDir = `frames-${randomBytes(4).toString("hex")}`;
+  const framesDir = `frames/${randomBytes(4).toString("hex")}`;
 
   try {
     const fps = pose.body.fps;
