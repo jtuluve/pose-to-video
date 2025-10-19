@@ -2,6 +2,7 @@ const { Pose } = require("./pose-format/index.js");
 const { CanvasPoseRenderer } = require("./renderers/canvas.pose-renderer.js");
 const { mkdirSync, writeFileSync, rmSync } = require("fs");
 const { spawn } = require("child_process");
+const { randomBytes } = require("crypto");
 const ffmpegPath = require("ffmpeg-static");
 
 /**
@@ -87,9 +88,9 @@ function cleanPoseJson(pose) {
  * @param {CanvasPoseRenderer} renderer - The renderer instance
  * @returns {void}
  */
-function generateFrames(pose, renderer) {
-  rmSync("frames", { recursive: true, force: true });
-  mkdirSync("frames");
+function generateFrames(pose, renderer, framesDir) {
+  rmSync(framesDir, { recursive: true, force: true });
+  mkdirSync(framesDir);
 
   console.log(`Rendering ${pose.body.frames.length} frames...`);
   let frame;
@@ -97,7 +98,7 @@ function generateFrames(pose, renderer) {
     frame = pose.body.frames[i];
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
-    const filename = `frames/frame_${String(i).padStart(
+    const filename = `${framesDir}/frame_${String(i).padStart(
       pose.body.frames.length.toString().length,
       "0"
     )}.png`;
@@ -112,7 +113,7 @@ function generateFrames(pose, renderer) {
  * @param {number} padLength - Number of digits to pad frame filenames
  * @returns {Promise<void>} - Resolves when video is created
  */
-async function combineFramesToVideo(fps, outputPath, padLength = 5) {
+async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
   return new Promise((resolve, reject) => {
     console.log("Combining frames into video...", ffmpegPath);
     const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
@@ -122,7 +123,7 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5) {
       "-framerate",
       String(fps),
       "-i",
-      `frames/frame_%0${padLength}d.png`,
+      `${framesDir}/frame_%0${padLength}d.png`,
       "-c:v",
       "libx264",
       "-pix_fmt",
@@ -156,17 +157,24 @@ async function processPose(pose, outputPath) {
     return false;
   }
 
-  const fps = pose.body.fps;
-  const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
+  const framesDir = `frames-${randomBytes(4).toString("hex")}`;
 
-  generateFrames(pose, renderer);
-  await combineFramesToVideo(
-    fps,
-    outputPath,
-    pose.body.frames.length.toString().length
-  );
+  try {
+    const fps = pose.body.fps;
+    const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
-  return true;
+    generateFrames(pose, renderer, framesDir);
+    await combineFramesToVideo(
+      fps,
+      outputPath,
+      pose.body.frames.length.toString().length,
+      framesDir
+    );
+
+    return true;
+  } finally {
+    rmSync(framesDir, { recursive: true, force: true });
+  }
 }
 
 /**

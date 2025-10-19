@@ -114,7 +114,8 @@ class CanvasPoseRenderer extends PoseRenderer {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.fillStyle = "rgba(255, 255, 255, 1)";
-
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
     const w = this.viewer.width;
     const h = this.viewer.height;
     this.thickness = Math.round(Math.sqrt(w * h) / 150);
