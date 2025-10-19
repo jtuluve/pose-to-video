@@ -97,7 +97,7 @@ function generateFrames(pose, renderer) {
     frame = pose.body.frames[i];
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
-    const filename = `frames/frame_${String(i).padStart(Math.max(pose.body.frames.length.toString().length, 5), "0")}.png`;
+    const filename = `frames/frame_${String(i).padStart(pose.body.frames.length.toString().length, "0")}.png`;
     writeFileSync(filename, buffer);
   }
 }
