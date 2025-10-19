@@ -124,7 +124,7 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5) {
       outputPath,
     ]);
 
-    ffmpeg.stdout.on("data", (d) => console.log(d.toString()));
+    // ffmpeg.stdout.on("data", (d) => console.log(d.toString()));
     ffmpeg.stderr.on("data", (d) => console.error(d.toString()));
     ffmpeg.on("close", (code) => {
       console.log(`FFmpeg finished with code ${code}`);
