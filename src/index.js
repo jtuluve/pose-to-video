@@ -1,6 +1,7 @@
 const { Pose } = require("./pose-format/index.js");
 const { CanvasPoseRenderer } = require("./renderers/canvas.pose-renderer.js");
-const { mkdirSync, writeFileSync, rmSync } = require("fs");
+const { mkdirSync, rmSync } = require("fs");
+const { writeFile } = require("fs/promises");
 const { spawn } = require("child_process");
 const { randomBytes } = require("crypto");
 const ffmpegPath = require("ffmpeg-static");
@@ -86,11 +87,13 @@ function cleanPoseJson(pose) {
  * Helper: Render frames and save them to disk
  * @param {Pose} pose - The pose object containing frames
  * @param {CanvasPoseRenderer} renderer - The renderer instance
- * @returns {void}
+ * @param {string} framesDir - Directory to save rendered frames
+ * @returns {Promise<void>}
  */
-function generateFrames(pose, renderer, framesDir) {
+async function generateFrames(pose, renderer, framesDir) {
   mkdirSync(framesDir, { recursive: true });
-
+  const data = [];
+  const padLength = pose.body.frames.length.toString().length;
   console.log(`Rendering ${pose.body.frames.length} frames...`);
   let frame;
   for (let i = 0; i < pose.body.frames.length; i++) {
@@ -98,11 +101,15 @@ function generateFrames(pose, renderer, framesDir) {
     const img = renderer.render(frame);
     const buffer = img.toBuffer("image/png");
     const filename = `${framesDir}/frame_${String(i).padStart(
-      pose.body.frames.length.toString().length,
+      padLength,
       "0"
     )}.png`;
-    writeFileSync(filename, buffer);
+    data.push([filename, buffer]);
+    // writeFile(filename, buffer);
   }
+  await Promise.all(
+    data.map(([filename, buffer]) => writeFile(filename, buffer))
+  );
 }
 
 /**
@@ -110,6 +117,7 @@ function generateFrames(pose, renderer, framesDir) {
  * @param {number} fps - Frames per second for the output video
  * @param {string} outputPath - Path to save the output video
  * @param {number} padLength - Number of digits to pad frame filenames
+ * @param {string} framesDir - Directory containing rendered frames
  * @returns {Promise<void>} - Resolves when video is created
  */
 async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
@@ -125,8 +133,16 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
       `${framesDir}/frame_%0${padLength}d.png`,
       "-c:v",
       "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "25", // slightly lower quality for speed
       "-pix_fmt",
       "yuv420p",
+      "-threads",
+      "0",
+      "-movflags",
+      "+faststart",
       outputPath,
     ]);
 
@@ -146,6 +162,9 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
 
 /**
  * Core function shared by both poseToVideo and poseJsonToVideo
+ * @param {Pose} pose - The pose object to process
+ * @param {string} outputPath - Path to save the output video
+ * @returns {Promise<boolean>} - Resolves to true if successful, false otherwise
  */
 async function processPose(pose, outputPath) {
   console.log("Cleaning pose..");
@@ -162,7 +181,7 @@ async function processPose(pose, outputPath) {
     const fps = pose.body.fps;
     const renderer = new CanvasPoseRenderer({ width: 640, height: 480, pose });
 
-    generateFrames(pose, renderer, framesDir);
+    await generateFrames(pose, renderer, framesDir);
     await combineFramesToVideo(
       fps,
       outputPath,
@@ -178,6 +197,9 @@ async function processPose(pose, outputPath) {
 
 /**
  * Converts a .pose file into a video
+ * @param {string} posePath - Path to the .pose file
+ * @param {string} outputPath - Path to save the output video
+ * @return {Promise<boolean>} - Resolves to true if successful, false otherwise
  */
 async function poseToVideo(posePath, outputPath) {
   const pose = await Pose.fromLocal(posePath);
@@ -186,12 +208,22 @@ async function poseToVideo(posePath, outputPath) {
 
 /**
  * Converts a JSON pose object into a video
+ * @param {Pose} pose - The pose JSON object
+ * @param {string} outputPath - Path to save the output video
+ * @return {Promise<boolean>} - Resolves to true if successful, false otherwise
  */
 async function poseJsonToVideo(pose, outputPath) {
   return processPose(pose, outputPath);
 }
 
-if (require.main === module) poseToVideo("./example.pose", "output.mp4");
+if (require.main === module) {
+  (async () => {
+    rmSync("output.mp4", { force: true });
+    console.time("Total time");
+    await poseToVideo("./example.pose", "output.mp4");
+    console.timeEnd("Total time");
+  })();
+}
 
 module.exports = {
   poseToVideo,

@@ -5,7 +5,7 @@ import { PoseModel } from "./renderers/types";
 
 export function cleanPoseJson(pose: PoseModel): PoseModel | null;
 
-export function generateFrames(pose: PoseModel, renderer: CanvasPoseRenderer): void;
+export function generateFrames(pose: PoseModel, renderer: CanvasPoseRenderer): Promise<void>;
 
 export function combineFramesToVideo(fps: number, outputPath: string, padLength?: number): Promise<void>;
 
