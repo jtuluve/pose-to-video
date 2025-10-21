@@ -1,7 +1,7 @@
 const { Pose } = require("./pose-format/index.js");
 const { CanvasPoseRenderer } = require("./renderers/canvas.pose-renderer.js");
-const { mkdirSync, rmSync } = require("fs");
-const { writeFile } = require("fs/promises");
+const { mkdirSync, rmSync, writeFileSync } = require("fs");
+// const { writeFile } = require("fs/promises");
 const { spawn } = require("child_process");
 const { randomBytes } = require("crypto");
 const ffmpegPath = require("ffmpeg-static");
@@ -31,7 +31,7 @@ function cleanPoseJson(pose) {
   const frames = [];
   for (let f = 0; f < pose.body._frames; f++) {
     const frame = pose.body.frames[f];
-    let isValid = true;
+    let hasValidPoint = false; // ✅ track if ANY valid point exists
 
     if (!Array.isArray(frame.people)) {
       console.warn(`⚠ Frame ${f}: Missing or invalid 'people' array`);
@@ -45,43 +45,44 @@ function cleanPoseJson(pose) {
           !Array.isArray(points) ||
           points.length !== component.points.length
         ) {
-          isValid = false;
-          break;
+          // isValid = false;
+          continue;
         }
 
         for (const point of points) {
-          if (Object.keys(point).length !== component.format.length) {
-            isValid = false;
-            break;
-          }
+          // ✅ A valid point = at least one numeric X/Y/Z, optional C
+          const numericKeys = ["X", "Y", "Z"];
+          const hasNumeric = numericKeys.some(
+            (k) => typeof point[k] === "number"
+          );
 
-          for (const key of component.format) {
-            if (!(key in point)) {
-              isValid = false;
-              break;
-            }
-            if (key !== "C" && typeof point[key] !== "number") {
-              isValid = false;
-              break;
-            }
+          if (hasNumeric) {
+            hasValidPoint = true;
+            break; // found at least one valid point, no need to check all
           }
-          if (!isValid) break;
         }
-        if (!isValid) break;
+        if (hasValidPoint) break;
       }
-      if (!isValid) break;
+      if (hasValidPoint) break;
     }
 
-    if (isValid) frames.push(frame);
+    if (hasValidPoint) {
+      frames.push(frame);
+    } else {
+      console.warn(`❌ Frame ${f}: No valid points found, skipping frame`);
+    }
   }
 
   console.log(
     `✅ ${frames.length}/${pose.body.frames.length} valid frames found`
   );
+
   pose.body.frames = frames;
   pose.body._frames = frames.length;
   return pose;
 }
+
+
 
 /**
  * Helper: Render frames and save them to disk
@@ -96,6 +97,7 @@ async function generateFrames(pose, renderer, framesDir) {
   const padLength = pose.body.frames.length.toString().length;
   console.log(`Rendering ${pose.body.frames.length} frames...`);
   let frame;
+  let savedFile = false, retryCount = 0;
   for (let i = 0; i < pose.body.frames.length; i++) {
     frame = pose.body.frames[i];
     const img = renderer.render(frame);
@@ -105,11 +107,23 @@ async function generateFrames(pose, renderer, framesDir) {
       "0"
     )}.png`;
     data.push([filename, buffer]);
-    // writeFile(filename, buffer);
+    savedFile = false;
+    retryCount = 0;
+    while(!savedFile && retryCount++ < 10) {
+      try {
+        writeFileSync(filename, buffer);
+        savedFile = true;
+      } catch (e) {
+        await new Promise((res) => setTimeout(res, 100));
+      }
+    }
+    if (!savedFile) {
+      throw new Error("Failed to save frame after multiple attempts");
+    }
   }
-  await Promise.all(
-    data.map(([filename, buffer]) => writeFile(filename, buffer))
-  );
+  // await Promise.all(
+  //   data.map(([filename, buffer]) => writeFile(filename, buffer))
+  // );
 }
 
 /**
@@ -121,6 +135,7 @@ async function generateFrames(pose, renderer, framesDir) {
  * @returns {Promise<void>} - Resolves when video is created
  */
 async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
+  if(fps!=25) console.warn("⚠️  Warning: Non-standard fps ("+fps+") may lead to audio-video sync issues.");
   return new Promise((resolve, reject) => {
     console.log("Combining frames into video...", ffmpegPath);
     const ffmpeg = spawn(ffmpegPath || "ffmpeg", [
@@ -128,7 +143,8 @@ async function combineFramesToVideo(fps, outputPath, padLength = 5, framesDir) {
       "-loglevel",
       "error",
       "-framerate",
-      String(fps),
+      // String(fps),
+      "25", // force 25 fps for compatibility
       "-i",
       `${framesDir}/frame_%0${padLength}d.png`,
       "-c:v",
@@ -191,7 +207,11 @@ async function processPose(pose, outputPath) {
 
     return true;
   } finally {
-    rmSync(framesDir, { recursive: true, force: true });
+    try {
+      rmSync(framesDir, { recursive: true, force: true });
+    } catch (e) {
+      console.warn("⚠️  Failed to clean up " + framesDir + " directory:", e);
+    }
   }
 }
 

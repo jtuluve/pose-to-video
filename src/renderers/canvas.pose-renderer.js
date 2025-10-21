@@ -16,7 +16,8 @@ class CanvasPoseRenderer extends PoseRenderer {
 
     this.canvas = createCanvas(viewer.width, viewer.height);
     this.ctx = this.canvas.getContext("2d");
-    this.thickness = 1;
+    
+    this.thickness = Math.round(Math.sqrt(viewer.width * viewer.height) / 150);
   }
 
   /**
@@ -115,10 +116,6 @@ class CanvasPoseRenderer extends PoseRenderer {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.fillStyle = "rgba(255, 255, 255, 1)";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    const w = this.viewer.width;
-    const h = this.viewer.height;
-    this.thickness = Math.round(Math.sqrt(w * h) / 150);
 
     this.renderFrame(frame);
 
